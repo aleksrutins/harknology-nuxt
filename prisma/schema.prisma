@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["referentialIntegrity"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+  referentialIntegrity = "prisma"
+}
+
+model Class {
+  id           Int       @id @default(autoincrement())
+  name         String
+  description  String
+  teacherEmail String       @db.VarChar(255)
+  teacher      User         @relation(fields: [teacherEmail], references: [email])
+  discussions  Discussion[]
+  students     User[]       @relation("ClassStudents")
+  joinCodes    JoinCode[]
+
+  @@index([teacherEmail])
+}
+
+model Discussion {
+  id           Int     @id @default(autoincrement())
+  classId      Int
+  description  String
+  name         String     @db.VarChar(255)
+  class        Class      @relation(fields: [classId], references: [id])
+  createdAt    DateTime   @default(now())
+  lastModified DateTime   @default(now())
+  responses    Response[]
+
+  @@index([classId])
+}
+
+model Response {
+  id           Int       @id @default(autoincrement())
+  userEmail    String       @db.VarChar(255)
+  content      String
+  discussionId Int
+  parentId     Int?
+  createdAt    DateTime     @default(now())
+  lastModified DateTime     @default(now())
+  discussion   Discussion?  @relation(fields: [discussionId], references: [id])
+  parent       Response?    @relation("ResponseToResponse_parentId", fields: [parentId], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  User         User         @relation(fields: [userEmail], references: [email])
+  responses    Response[]   @relation("ResponseToResponse_parentId")
+  connectsTo   Connection[] @relation("Response_connectsTo")
+  connectsFrom Connection[] @relation("Response_connectsFrom")
+
+  @@index([discussionId, parentId, userEmail])
+}
+
+model User {
+  id              String     @id @default(cuid())
+  name            String?
+  email           String?    @unique
+  password        String?
+  emailVerified   DateTime?
+  image           String?
+  classes         Class[]    @relation("ClassStudents")
+  teachingClasses Class[]
+  responses       Response[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model JoinCode {
+  code    String   @id @default(cuid())
+  classId Int
+  expires DateTime
+  class   Class    @relation(fields: [classId], references: [id])
+}
+
+model Connection {
+  id     Int   @id @default(autoincrement())
+  fromId Int
+  toId   Int
+  type   ConnectionType
+  from   Response @relation("Response_connectsTo", fields: [fromId], references: [id], onUpdate: NoAction)
+  to     Response @relation("Response_connectsFrom", fields: [toId], references: [id], onUpdate: NoAction)
+
+  @@index([fromId, toId])
+}
+
+enum ConnectionType {
+  Evidence
+  ResponseTo
+}
